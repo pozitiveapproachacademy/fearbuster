@@ -44,6 +44,25 @@ function uid(){return (crypto.randomUUID?crypto.randomUUID():"fb-"+Date.now()+"-
 function read(k,d){try{var x=JSON.parse(localStorage.getItem(k));return x==null?d:x}catch(e){return d}}function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function lib(){return read(K.library,[])}function revs(){return read(K.reviews,[])}function pref(){return read(K.prefs,{sound:false,autosave:true})}
 function blank(){return{id:uid(),createdAt:new Date().toISOString(),completedAt:null,stage:1,fear:"",weight:"",meaning:"",sort:{realistic:"",exaggerated:"",unknown:""},beliefId:"",statementText:"",values:"",coping:"",smallStep:"",immediateAfter:"",whoToContact:"",selfCare:"",closing:""}}
+function migrateV1(){
+if(localStorage.getItem("fb2-migrated-v1"))return;
+try{
+var old=JSON.parse(localStorage.getItem("fearbuster:practices:v1")||"[]");
+if(Array.isArray(old)&&old.length){
+var existing=lib(),ids=new Set(existing.map(function(p){return p.id}));
+var unfinished=[];
+old.forEach(function(p){
+var r=p.responses||{},s=r.sorting||{},su=r.support||{},rp=r.returnPlan||{};
+var n={id:p.id||uid(),createdAt:p.createdAt||new Date().toISOString(),completedAt:p.completed?(p.updatedAt||p.createdAt||new Date().toISOString()):null,stage:p.currentStage||1,fear:r.fearName||"",weight:r.bodySensation||"",meaning:r.meaningBeneathFear||"",sort:{realistic:s.realistic||"",exaggerated:s.exaggerated||"",unknown:s.unknown||""},beliefId:su.beliefId||"",statementText:su.statementText||"",values:r.values||"",coping:r.copingResources||"",smallStep:r.smallStep||"",immediateAfter:rp.immediateAfter||"",whoToContact:rp.whoToContact||"",selfCare:rp.selfCare||"",closing:r.closingReflection||""};
+if(p.completed){if(!ids.has(n.id)){existing.push(n);ids.add(n.id)}}else unfinished.push({n:n,u:p.updatedAt||p.createdAt||""});
+});
+existing.sort(function(a,b){return new Date(b.completedAt||b.createdAt)-new Date(a.completedAt||a.createdAt)});write(K.library,existing);
+if(!read(K.current,null)&&unfinished.length){unfinished.sort(function(a,b){return String(b.u).localeCompare(String(a.u))});write(K.current,unfinished[0].n)}
+}
+var os=JSON.parse(localStorage.getItem("fearbuster:settings:v1")||"null");if(os&&typeof os.autosaveEnabled==="boolean"){var q=pref();q.autosave=os.autosaveEnabled;write(K.prefs,q)}
+}catch(e){}
+localStorage.setItem("fb2-migrated-v1","1");
+}
 function show(id){all(".view").forEach(function(v){v.classList.remove("on")});$("#"+id).classList.add("on");window.scrollTo({top:0,behavior:"smooth"})}
 function fmt(x){return new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",year:"numeric"}).format(new Date(x))}
 function toast(m){var t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(function(){t.classList.remove("show")},2200)}
@@ -95,7 +114,7 @@ function openGround(){openDialog('<button class="btn ghost" id="x" style="float:
 function openSettings(){var p=pref();openDialog('<button class="btn ghost" id="x" style="float:right">Close</button><div class="eyebrow">Privacy & atmosphere</div><h2>Your FearBuster settings</h2><div class="setting"><div><strong>Autosave in this browser</strong><div class="sub" style="font-size:12px">Keeps unfinished work on this device.</div></div><button class="switch '+(p.autosave?"on":"")+'" id="auto"><span></span></button></div><div class="setting"><div><strong>Optional ambient soundscape</strong><div class="sub" style="font-size:12px">Off by default. Generated locally in your browser; nothing is streamed.</div></div><button class="switch '+(p.sound?"on":"")+'" id="sound"><span></span></button></div><div class="note"><strong>Privacy:</strong> Your entries are stored only in this browser on this device unless you choose to export them. Other people with access to this device or browser profile may be able to view them.</div>');$("#x").onclick=closeDialog;$("#auto").onclick=function(){var q=pref();q.autosave=!q.autosave;write(K.prefs,q);this.classList.toggle("on",q.autosave);if(!q.autosave)localStorage.removeItem(K.current)};$("#sound").onclick=function(){var q=pref();q.sound=!q.sound;write(K.prefs,q);this.classList.toggle("on",q.sound);q.sound?startSound():stopSound()}}
 function startSound(){if(audio)return;try{var C=window.AudioContext||window.webkitAudioContext,ctx=new C(),g=ctx.createGain(),o1=ctx.createOscillator(),o2=ctx.createOscillator();g.gain.value=.016;g.connect(ctx.destination);o1.type="sine";o2.type="sine";o1.frequency.value=174;o2.frequency.value=261.6;o1.connect(g);o2.connect(g);o1.start();o2.start();audio={ctx:ctx,o1:o1,o2:o2}}catch(e){toast("Sound is not available in this browser.")}}
 function stopSound(){if(!audio)return;try{audio.o1.stop();audio.o2.stop();audio.ctx.close()}catch(e){}audio=null}
-$("#homeBtn").onclick=home;$("#libBtn").onclick=renderLibrary;$("#reviewBtn").onclick=renderReview;$("#groundBtn").onclick=openGround;$("#settingsBtn").onclick=openSettings;if(pref().sound)startSound();home();
+$("#homeBtn").onclick=home;$("#libBtn").onclick=renderLibrary;$("#reviewBtn").onclick=renderReview;$("#groundBtn").onclick=openGround;$("#settingsBtn").onclick=openSettings;migrateV1();if(pref().sound)startSound();home();
 })();
 </script>
 </body>
